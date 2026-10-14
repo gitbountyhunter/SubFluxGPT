@@ -1,0 +1,67 @@
+#!/bin/bash
+# SubFluxGPT Main Entry Point
+# Use this alias to activate SubFluxGPT without typing python3 every time
+
+SUBFLUX_DIR="/Users/beanman/Documents/Desktop/SubFluxGPT"
+
+# Main SubFluxGPT commands
+case "$1" in
+    train)
+        python3 "$SUBFLUX_DIR/training_pipeline/train_llmc.py" "${@:2}"
+        ;;
+    benchmark)
+        python3 "$SUBFLUX_DIR/run_benchmark.py" "${@:2}"
+        ;;
+    cloud)
+        python3 "$SUBFLUX_DIR/run_cloud_recon.py" "${@:2}"
+        ;;
+    recon)
+        python3 "$SUBFLUX_DIR/run_recon.py" "${@:2}"
+        ;;
+    server)
+        python3 -m "$SUBFLUX_DIR/inference/model_server" "${@:2}"
+        ;;
+    scheduler)
+        python3 "$SUBFLUX_DIR/training_pipeline/scheduler.py" "${@:2}"
+        ;;
+    collect)
+        python3 "$SUBFLUX_DIR/data_collector/main.py" "${@:2}"
+        ;;
+    monitor)
+        python3 "$SUBFLUX_DIR/bug_bounty_monitor.py" "${@:2}"
+        ;;
+    fine-tune)
+        python3 "$SUBFLUX_DIR/unsloth_finetuner.py" "${@:2}"
+        ;;
+    learn)
+        python3 "$SUBFLUX_DIR/self_improving_llm.py" "${@:2}"
+        ;;
+    *)
+        echo "SubFluxGPT - AI-Powered Bug Bounty Reconnaissance System"
+        echo ""
+        echo "Usage: subfluxgpt <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  train       Train LLM models with llm.c backend"
+        echo "  benchmark   Run benchmarking on models"
+        echo "  cloud       Run cloud reconnaissance"
+        echo "  recon       Run security reconnaissance"
+        echo "  server      Start inference server"
+        echo "  scheduler   Run continuous training scheduler"
+        echo "  collect     Collect data from bug bounty platforms"
+        echo "  monitor     Monitor bug bounty platforms for new scopes"
+        echo "  fine-tune   Fine-tune models with Unsloth/QLoRA"
+        echo "  learn       Run continuous learning system"
+        echo ""
+        echo "Examples:"
+        echo "  subfluxgpt train --model_size 124M --verbose"
+        echo "  subfluxgpt cloud --enhanced --apex example.com"
+        echo "  subfluxgpt recon --domain example.com"
+        echo "  subfluxgpt benchmark --domain example.com --verbose"
+        echo ""
+        echo "For more information, see:"
+        echo "  - MASTER_COMMAND_GUIDE.md"
+        echo "  - MINI_AI_GUIDE.md"
+        echo "  - AI_WORKFLOWS.md"
+        ;;
+esac

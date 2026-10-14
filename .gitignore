@@ -25,6 +25,9 @@ venv/
 env/
 ENV/
 .venv
+.ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
@@ -33,43 +36,68 @@ ENV/
 *.swo
 *~
 .DS_Store
+*.sublime-*
+*.code-workspace
 
 # Environment Variables
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+.env.development
+*.env
+secrets.cfg
+secrets.cfg.save
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
+database/*.db
 
 # Models and Data
 models/checkpoints/
 models/*.bin
 models/*.pt
 models/*.pth
+models/*.safetensors
+models/*.ckpt
 data/llmc/*.bin
 data/bugbounty_tokens/
 data/hackerone_tokens/
 data/hackerone_gpt2_tokens/
 data_collector/storage/
 cloud_recon_data/
+scope_monitoring/
 *.bin
+*.safetensors
 
 # Logs
 logs/
 *.log
+log.txt
+*.logs
 
 # Metrics and Results
 metrics/
 benchmarking/results/
 recon_results.json
+scope_changes.json
+new_companies.json
+*.json
+!config.yaml
+!requirements.txt
 
 # Temporary Files
 *.tmp
 *.temp
 .cache/
+.cache/
+tmp/
+temp/
 
 # llm.c build artifacts
 llm.c/llm.c-master/build/
@@ -80,19 +108,26 @@ llm.c/llm.c-master/profile_*
 # IPython
 .ipynb_checkpoints/
 *.ipynb
+.ipynb_checkpoints/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
+.pytest_cache/
+.tox/
+.hypothesis/
 
 # MyPy
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.pyre/
+.pytype/
 
 # Jupyter
 .jupyter/
+jupyter_notebook_config.py
 
 # MacOS
 .DS_Store
@@ -122,12 +157,53 @@ Temporary Items
 *.bak
 *.backup
 *~
+*.old
+*.orig
 
 # BBRF
 .bbrf/
+.bbrf-backup-*.tar.gz
 
 # Security tool outputs
 *.txt
-*.json
+*.csv
+*.xml
 !config.yaml
 !requirements.txt
+
+# PID files
+*.pid
+*.sock
+
+# Process monitoring
+.monitoring/
+*.pkl
+*.pickle
+
+# Scope monitoring data
+scope_snapshots/
+scope_history/
+company_tracker/
+
+# Continuous learning (keep core code, ignore runtime data)
+continuous_learning/*.pkl
+continuous_learning/*.pickle
+continuous_learning/snapshots/
+continuous_learning/cache/
+training_runs/
+model_versions/
+
+# Claude/Devon specific
+.devin/
+.agents/
+.claude/
+.claude.json
+.codeium/
+
+# Parallels
+.Parallels/
+
+# Other
+.DS_Store?
+ehthumbs.db
+Thumbs.db
