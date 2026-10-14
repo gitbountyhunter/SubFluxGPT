@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # Database service
+  postgres:
+    image: postgres:15-alpine
+    container_name: subfluxgpt_db
+    environment:
+      POSTGRES_DB: subfluxgpt
+      POSTGRES_USER: subflux
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U subflux"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: subfluxgpt_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Data collector service
+  collector:
+    build: .
+    container_name: subfluxgpt_collector
+    command: python -m data_collector.main
+    volumes:
+      - ./data_collector:/app/data_collector
+      - ./data_collector/storage:/app/data_collector/storage
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+
+  # Training pipeline service
+  trainer:
+    build: .
+    container_name: subfluxgpt_trainer
+    command: python -m training_pipeline.scheduler
+    volumes:
+      - ./training_pipeline:/app/training_pipeline
+      - ./llama2.c:/app/llama2.c
+      - ./nanoGPT:/app/nanoGPT
+      - ./models:/app/models
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
+      - REDIS_URL=redis://redis:6379/0
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+
+  # Inference server
+  inference:
+    build: .
+    container_name: subfluxgpt_inference
+    command: python -m inference.model_server
+    volumes:
+      - ./inference:/app/inference
+      - ./models:/app/models
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MODEL_PATH=/app/models
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+
+  # Monitoring dashboard
+  monitoring:
+    build: .
+    container_name: subfluxgpt_monitoring
+    command: python -m monitoring.dashboard
+    volumes:
+      - ./monitoring:/app/monitoring
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    environment:
+      - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+
+volumes:
+  postgres_data:
+
+networks:
+  subfluxgpt_network:
+    driver: bridge

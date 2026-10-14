@@ -1,0 +1,18 @@
+[Unit]
+Description=SubFluxGPT Data Collector
+After=network.target postgresql.service redis.service
+Requires=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=beanman
+WorkingDirectory=/Users/beanman/Documents/Desktop/SubFluxGPT
+Environment="PATH=/Users/beanman/Documents/Desktop/SubFluxGPT/venv/bin"
+ExecStart=/Users/beanman/Documents/Desktop/SubFluxGPT/venv/bin/python -m data_collector.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

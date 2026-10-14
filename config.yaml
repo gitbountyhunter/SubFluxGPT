@@ -1,0 +1,462 @@
+# SubFluxGPT Configuration File
+
+# Database Configuration
+database:
+  url: ${DATABASE_URL:-postgresql://subflux:changeme@localhost:5432/subfluxgpt}
+  pool_size: 10
+  max_overflow: 20
+
+# Redis Configuration
+redis:
+  url: ${REDIS_URL:-redis://localhost:6379/0}
+  cache_ttl: 3600  # 1 hour
+
+# Data Collection Configuration
+data_collection:
+  # How often to run collectors (in seconds)
+  collection_interval: 3600  # 1 hour
+  
+  # Rate limiting
+  requests_per_minute: 60
+  retry_attempts: 3
+  retry_delay: 5  # seconds
+  
+  # Data storage
+  raw_data_path: ./data_collector/storage/raw
+  max_storage_gb: 100
+
+# Platform-specific configurations
+platforms:
+  hackerone:
+    enabled: true
+    api_key: ${HACKERONE_API_KEY:-}
+    api_username: ${HACKERONE_API_USERNAME:-}
+    use_dataset: true  # Use HuggingFace dataset instead of API
+    dataset_id: "Hacker0x01/hackerone_disclosed_reports"
+    
+  bugcrowd:
+    enabled: true
+    api_token: ${BUGCROWD_API_TOKEN:-}
+    base_url: "https://api.bugcrowd.com"
+    
+  yeswehack:
+    enabled: true
+    api_key: ${YESWEHACK_API_KEY:-}
+    base_url: "https://api.yeswehack.com"
+    
+  intigriti:
+    enabled: false  # Enable when ready
+    api_key: ${INTIGRITI_API_KEY:-}
+    base_url: "https://api.intigriti.com"
+    
+  synack:
+    enabled: false  # Enable when ready
+    api_key: ${SYNACK_API_KEY:-}
+    base_url: "https://api.synack.com"
+
+# Domain Processing Configuration
+domain_processing:
+  # Domain validation
+  validate_domains: true
+  validation_method: async  # sync, async, or none
+  
+  # DNS validation
+  dns_timeout: 5  # seconds
+  check_a_record: true
+  check_aaaa_record: true
+  check_mx_record: false
+  
+  # Certificate Transparency logs
+  use_ct_logs: true
+  ct_log_timeout: 10  # seconds
+  
+  # Subdomain discovery
+  enable_subdomain_discovery: true
+  use_crtsh: true
+  use_securitytrails: false  # Requires API key
+  securitytrails_api_key: ${SECURITYTRAILS_API_KEY:-}
+  
+  # Normalization
+  convert_to_lowercase: true
+  strip_www: false
+  punycode_decode: true
+
+# Training Configuration
+training:
+  # Model sizes to train
+  model_sizes:
+    - 15M
+    - 42M
+    - 110M
+  
+  # Training trigger
+  min_new_reports: 1000  # Train after this many new reports
+  max_reports_per_batch: 10000
+  
+  # llama2.c specific
+  llama2c:
+    max_seq_len: 256
+    vocab_source: custom
+    vocab_size: 4096
+    batch_size: 16
+    gradient_accumulation_steps: 8
+    learning_rate: 5e-4
+    max_iters: 100000
+    eval_interval: 2000
+    eval_iters: 100
+  
+  # nanoGPT specific
+  nanogpt:
+    block_size: 256
+    batch_size: 64
+    max_iters: 50000
+    learning_rate: 3e-4
+    eval_interval: 1000
+    eval_iters: 200
+  
+  # GPT-2 specific (HuggingFace Transformers)
+  gpt2:
+    train_file: data/bugbounty_tokens/train.txt
+    val_file: data/bugbounty_tokens/val.txt
+    block_size: 512
+    batch_size: 4
+    gradient_accumulation_steps: 4
+    learning_rate: 5e-5
+    weight_decay: 0.01
+    num_train_epochs: 3
+    warmup_steps: 500
+    logging_steps: 100
+    save_steps: 1000
+    eval_steps: 1000
+    save_total_limit: 3
+    fp16: true
+    model_sizes:
+      - 124M
+      - 355M
+      - 774M
+      - 1558M
+  
+  # llm.c specific (Karpathy's C/CUDA implementation)
+  llmc:
+    use_gpu: true
+    precision: BF16  # BF16, FP16, or FP32
+    use_cudnn: false  # Enable cuDNN for flash attention (requires cuDNN installation)
+    eval_interval: 250
+    sample_interval: 250
+    num_gpus: 1
+    learning_rate: 3e-4
+    batch_size: 64
+    max_steps: 5000
+    model_sizes:
+      - 124M
+      - 350M
+      - 774M
+      - 1558M
+  
+  # Checkpoint management
+  checkpoint_dir: ./models/checkpoints
+  keep_checkpoints: 5  # Keep last N checkpoints
+  export_on_best: true
+  
+  # Device configuration
+  device: cuda  # cuda, cpu, or mps (for Mac)
+  compile: true  # Use torch.compile if available
+
+# Inference Configuration
+inference:
+  host: 0.0.0.0
+  port: 8000
+  workers: 4
+  
+  # Model to use for inference
+  default_model: llama2c_42M  # llama2c_15M, llama2c_42M, llama2c_110M
+  
+  # Generation parameters
+  max_new_tokens: 256
+  temperature: 0.8
+  top_p: 0.9
+  
+  # Caching
+  enable_cache: true
+  cache_ttl: 300  # 5 minutes
+
+# Monitoring Configuration
+monitoring:
+  host: 0.0.0.0
+  port: 8080
+  
+  # Metrics collection
+  collect_metrics: true
+  metrics_interval: 60  # seconds
+  
+  # Logging
+  log_level: INFO  # DEBUG, INFO, WARNING, ERROR
+  log_file: ./logs/subfluxgpt.log
+  log_rotation: daily
+  log_retention_days: 30
+
+# Kaspersky Integration
+kaspersky:
+  enabled: false  # Enable when ready
+  api_endpoint: ${KASPERSKY_API_ENDPOINT:-}
+  api_key: ${KASPERSKY_API_KEY:-}
+  sync_interval: 300  # 5 minutes
+  
+  # Features
+  auto_submit_domains: false
+  auto_submit_reports: false
+  receive_scan_results: false
+
+# External API Configuration
+external_apis:
+  # OpenAI Configuration
+  openai:
+    enabled: false
+    api_key: ${OPENAI_API_KEY:-}
+    model: gpt-4-turbo
+    context_window: 128000
+
+  # Anthropic Configuration
+  anthropic:
+    enabled: false
+    api_key: ${ANTHROPIC_API_KEY:-}
+    model: claude-3-opus-20240229
+    context_window: 200000
+
+  # Cohere Configuration
+  cohere:
+    enabled: false
+    api_key: ${COHERE_API_KEY:-}
+    model: command
+    context_window: 4096
+
+  # Add more providers as needed
+  # google:
+  #   enabled: false
+  #   api_key: ${GOOGLE_API_KEY:-}
+  #   model: gemini-pro
+  #   context_window: 32000
+
+# Local Models Configuration
+local_models:
+  enabled: true
+  models:
+    - llama2c_15M
+    - llama2c_42M
+    - llama2c_110M
+    - gpt2_124M
+    - gpt2_355M
+    - gpt2_774M
+    - gpt2_1558M
+    - llmc_124M
+    - llmc_350M
+    - llmc_774M
+    - llmc_1558M
+
+  # Model-specific settings
+  llama2c:
+    context_window: 256
+    checkpoint_dir: ./models/llama2c
+
+  gpt2:
+    context_window: 1024
+    checkpoint_dir: ./models/gpt2
+
+  llmc:
+    context_window: 1024
+    checkpoint_dir: ./models/llmc
+
+# Benchmarking Configuration
+benchmarking:
+  enabled: true
+  output_dir: ./benchmarking/results
+  auto_run_on_domain_analysis: true
+  compare_local_vs_external: true
+
+# BBRF Configuration
+bbrf:
+  enabled: false
+  api_endpoint: ${BBRF_API_ENDPOINT:-http://localhost:5000}
+  api_key: ${BBRF_API_KEY:-}
+  workspace: subfluxgpt
+  username: subfluxgpt
+
+# Security Tools Configuration
+security_tools:
+  httpx:
+    enabled: false
+    binary_path: httpx
+    timeout: 300
+    options:
+      timeout: 10
+      threads: 50
+
+  katana:
+    enabled: false
+    binary_path: katana
+    timeout: 300
+    options:
+      depth: 2
+      rate_limit: 10
+
+  anew:
+    enabled: false
+    binary_path: anew
+    timeout: 60
+    options: {}
+
+  gau:
+    enabled: false
+    binary_path: gau
+    timeout: 300
+    options:
+      threads: 5
+      blacklist: "(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)"
+
+  nuclei:
+    enabled: false
+    binary_path: nuclei
+    timeout: 600
+    options:
+      severity: medium,high,critical
+      templates: cves/
+      rate_limit: 100
+
+  naabu:
+    enabled: false
+    binary_path: naabu
+    timeout: 300
+    options:
+      top_ports: 1000
+      rate_limit: 1000
+
+  dnsx:
+    enabled: false
+    binary_path: dnsx
+    timeout: 300
+    options:
+      resolver: 8.8.8.8
+
+  massdns:
+    enabled: false
+    binary_path: massdns
+    timeout: 300
+    resolvers_file: /etc/resolvers.txt
+    options:
+      threads: 1000
+
+  amass:
+    enabled: false
+    binary_path: amass
+    timeout: 600
+    options:
+      timeout: 300
+      include_unresolvable: false
+
+  hakrawler:
+    enabled: false
+    binary_path: hakrawler
+    timeout: 300
+    options:
+      depth: 3
+      scope: "rdn"
+      subs: true
+
+  waybackurls:
+    enabled: false
+    binary_path: waybackurls
+    timeout: 300
+    options:
+      no_subs: false
+
+  subfinder:
+    enabled: false
+    binary_path: subfinder
+    timeout: 300
+    options:
+      all: false
+      threads: 10
+
+  assetfinder:
+    enabled: false
+    binary_path: assetfinder
+    timeout: 300
+    options:
+      ignore: ""
+
+  crtsh:
+    enabled: false
+    timeout: 30
+
+  ffuf:
+    enabled: false
+    binary_path: ffuf
+    timeout: 600
+    options:
+      threads: 40
+      extensions: "php,html,js"
+      match_status: "200,301,302"
+
+  feroxbuster:
+    enabled: false
+    binary_path: feroxbuster
+    timeout: 600
+    options:
+      threads: 50
+      extensions: "php,html,js"
+      depth: 3
+
+  arjun:
+    enabled: false
+    binary_path: arjun
+    timeout: 300
+    options:
+      headers: ""
+
+  subjs:
+    enabled: false
+    binary_path: subjs
+    timeout: 300
+    options: {}
+
+# Cloud Recon Configuration
+cloud_recon:
+  enabled: true
+  output_dir: ./cloud_recon_data
+  base_url: https://kaeferjaeger.gay/?dir=sni-ip-ranges
+  providers:
+    - amazon
+    - digitalocean
+    - google
+    - microsoft
+    - oracle
+  ai_analysis:
+    enabled: true
+    high_value_keywords:
+      - admin
+      - api
+      - auth
+      - console
+      - dashboard
+      - payment
+      - billing
+      - account
+      - user
+      - data
+      - cdn
+      - cloud
+      - storage
+      - database
+      - cache
+  risk_threshold: 5
+
+# Security
+security:
+  encrypt_api_keys: true
+  key_file: ./config/keys.enc
+  allowed_hosts:
+    - localhost
+    - 127.0.0.1
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
