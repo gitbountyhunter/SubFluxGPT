@@ -45,18 +45,35 @@ class BugBountyMonitor:
     """Monitor bug bounty platforms for changes"""
 
     def __init__(self, db_path: str = 'data/monitor/bounty_monitor.db',
-                 check_interval: int = 3600):
+                 check_interval: int = 3600,
+                 organize_folders: bool = False,
+                 output_dir: str = 'targets',
+                 auto_recon: bool = False,
+                 recon_cmd: str = None):
         """
         Initialize monitor
 
         Args:
             db_path: Path to monitoring database
             check_interval: Check interval in seconds (default: 1 hour)
+            organize_folders: Organize results by company folders
+            output_dir: Base directory for organized folders
+            auto_recon: Automatically run recon on new programs
+            recon_cmd: Custom recon command (use {domain} placeholder)
         """
         self.db_path = db_path
         self.check_interval = check_interval
         self.monitor_dir = Path('data/monitor')
         self.monitor_dir.mkdir(parents=True, exist_ok=True)
+
+        # Folder organization
+        self.organize_folders = organize_folders
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Auto recon
+        self.auto_recon = auto_recon
+        self.recon_cmd = recon_cmd or "subfluxgpt recon --domain {domain} --verbose"
 
         # Initialize database
         self._init_db()
@@ -385,20 +402,137 @@ class BugBountyMonitor:
         """Execute SubFluxGPT based on trigger"""
         if trigger['type'] == 'new_program':
             apex_domains = trigger.get('apex_domains', [])
+            company = trigger.get('company', 'unknown')
+            program = trigger.get('program', 'unknown')
+
             if apex_domains:
-                logger.info(f"Starting recon on new program: {trigger['company']}")
+                logger.info(f"Starting recon on new program: {company}")
+
+                # Create company folder if organizing
+                if self.organize_folders:
+                    company_folder = self._create_company_folder(company, program)
+                    self._save_scope_to_folder(company_folder, trigger)
+
                 # Trigger cloud recon
                 for apex in apex_domains:
-                    self._run_cloud_recon(apex)
+                    if self.organize_folders:
+                        self._run_cloud_recon_with_folder(apex, company_folder)
+                    else:
+                        self._run_cloud_recon(apex)
 
         elif trigger['type'] == 'scope_change':
             changes = trigger.get('changes', [])
-            logger.info(f"Scope changes detected for {trigger['company']}")
+            company = trigger.get('company', 'unknown')
+            program = trigger.get('program', 'unknown')
+
+            logger.info(f"Scope changes detected for {company}")
+
+            # Create company folder if organizing
+            if self.organize_folders:
+                company_folder = self._create_company_folder(company, program)
+                self._save_scope_to_folder(company_folder, trigger)
+
             # Re-run recon on changed domains
             for change in changes:
                 if change['type'] == 'apex_domains':
                     for apex in change['new']:
-                        self._run_cloud_recon(apex)
+                        if self.organize_folders:
+                            self._run_cloud_recon_with_folder(apex, company_folder)
+                        else:
+                            self._run_cloud_recon(apex)
+
+    def _create_company_folder(self, company: str, program: str) -> Path:
+        """Create folder structure for company"""
+        # Sanitize company name
+        safe_company = company.replace(' ', '_').replace('/', '_').lower()
+        safe_program = program.replace(' ', '_').replace('/', '_').lower()
+
+        # Create folder structure
+        company_folder = self.output_dir / safe_company / safe_program
+        company_folder.mkdir(parents=True, exist_ok=True)
+
+        # Create subfolders
+        (company_folder / 'scope').mkdir(exist_ok=True)
+        (company_folder / 'recon').mkdir(exist_ok=True)
+        (company_folder / 'reports').mkdir(exist_ok=True)
+        (company_folder / 'findings').mkdir(exist_ok=True)
+
+        logger.info(f"Created company folder: {company_folder}")
+        return company_folder
+
+    def _save_scope_to_folder(self, folder: Path, trigger: Dict[str, Any]):
+        """Save scope information to folder"""
+        scope_file = folder / 'scope' / 'scope.json'
+
+        scope_data = {
+            'company': trigger.get('company'),
+            'program': trigger.get('program'),
+            'platform': trigger.get('platform'),
+            'apex_domains': trigger.get('apex_domains', []),
+            'subdomains': trigger.get('subdomains', []),
+            'in_scope': trigger.get('in_scope', []),
+            'out_of_scope': trigger.get('out_of_scope', []),
+            'url': trigger.get('url'),
+            'detected_at': datetime.now().isoformat()
+        }
+
+        with open(scope_file, 'w') as f:
+            json.dump(scope_data, f, indent=2)
+
+        logger.info(f"Saved scope to: {scope_file}")
+
+    def _run_cloud_recon_with_folder(self, apex_domain: str, folder: Path):
+        """Run cloud recon and save to company folder"""
+        import subprocess
+
+        logger.info(f"Running cloud recon on {apex_domain}")
+
+        # Sanitize domain for filename
+        safe_domain = apex_domain.replace('.', '_').replace('/', '_')
+
+        # Output file
+        output_file = folder / 'recon' / f"{safe_domain}_cloud_recon.json"
+
+        try:
+            # Run cloud recon with output
+            result = subprocess.run(
+                ['subfluxgpt', 'cloud', '--enhanced', '--apex', apex_domain,
+                 '--output', str(output_file), '--verbose'],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+
+            if result.returncode == 0:
+                logger.info(f"Cloud recon completed for {apex_domain}, saved to {output_file}")
+
+                # Also feed to AI learning
+                self._feed_to_learning(apex_domain, result.stdout)
+
+            else:
+                logger.error(f"Cloud recon failed for {apex_domain}: {result.stderr}")
+
+        except Exception as e:
+            logger.error(f"Error running cloud recon: {e}")
+
+    def _feed_to_learning(self, domain: str, output: str):
+        """Feed recon results to continuous learning"""
+        try:
+            from ai_integration.continuous_learner import ContinuousLearner
+
+            learner = ContinuousLearner()
+            learner.log_tool_output(
+                tool='cloud_recon',
+                command=f'subfluxgpt cloud --enhanced --apex {domain}',
+                stdout=output,
+                stderr='',
+                analyze=True
+            )
+
+            logger.debug(f"Fed {domain} recon results to learning system")
+
+        except Exception as e:
+            logger.error(f"Error feeding to learning: {e}")
 
     def _run_cloud_recon(self, apex_domain: str):
         """Run cloud reconnaissance on apex domain"""
@@ -489,10 +623,28 @@ def main():
                        help='List new programs')
     parser.add_argument('--list-changes', type=int, default=24,
                        help='List changes in last N hours')
+    parser.add_argument('--organize-folders', action='store_true',
+                       help='Organize results by company folders')
+    parser.add_argument('--output-dir', type=str, default='targets',
+                       help='Base directory for organized folders')
+    parser.add_argument('--auto-recon', action='store_true',
+                       help='Automatically run recon on new programs')
+    parser.add_argument('--recon-cmd', type=str,
+                       help='Custom recon command (use {domain} placeholder)')
+    parser.add_argument('--platform', type=str,
+                       help='Monitor specific platform only')
+    parser.add_argument('--platforms', type=str,
+                       help='Monitor multiple platforms (comma-separated)')
 
     args = parser.parse_args()
 
-    monitor = BugBountyMonitor(check_interval=args.interval)
+    monitor = BugBountyMonitor(
+        check_interval=args.interval,
+        organize_folders=args.organize_folders,
+        output_dir=args.output_dir,
+        auto_recon=args.auto_recon,
+        recon_cmd=args.recon_cmd
+    )
 
     if args.list_new:
         programs = monitor.get_new_programs()
