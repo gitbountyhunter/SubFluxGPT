@@ -30,6 +30,15 @@ case "$1" in
     monitor)
         python3 "$SUBFLUX_DIR/bug_bounty_monitor.py" "${@:2}"
         ;;
+    monitor-start)
+        python3 "$SUBFLUX_DIR/bug_bounty_monitor.py" --start "${@:2}"
+        ;;
+    monitor-stop)
+        python3 "$SUBFLUX_DIR/bug_bounty_monitor.py" --stop
+        ;;
+    monitor-status)
+        python3 "$SUBFLUX_DIR/bug_bounty_monitor.py" --status
+        ;;
     fine-tune)
         python3 "$SUBFLUX_DIR/unsloth_finetuner.py" "${@:2}"
         ;;

@@ -49,7 +49,9 @@ class BugBountyMonitor:
                  organize_folders: bool = False,
                  output_dir: str = 'targets',
                  auto_recon: bool = False,
-                 recon_cmd: str = None):
+                 recon_cmd: str = None,
+                 enable_bbrf: bool = False,
+                 bbrf_config: dict = None):
         """
         Initialize monitor
 
@@ -60,6 +62,8 @@ class BugBountyMonitor:
             output_dir: Base directory for organized folders
             auto_recon: Automatically run recon on new programs
             recon_cmd: Custom recon command (use {domain} placeholder)
+            enable_bbrf: Enable BBRF integration
+            bbrf_config: BBRF configuration dictionary
         """
         self.db_path = db_path
         self.check_interval = check_interval
@@ -74,6 +78,19 @@ class BugBountyMonitor:
         # Auto recon
         self.auto_recon = auto_recon
         self.recon_cmd = recon_cmd or "subfluxgpt recon --domain {domain} --verbose"
+
+        # BBRF integration
+        self.enable_bbrf = enable_bbrf
+        self.bbrf_client = None
+        if enable_bbrf:
+            try:
+                from recon_tools.bbrf_client import BBRFClient
+                bbrf_config = bbrf_config or {'enabled': True}
+                self.bbrf_client = BBRFClient(bbrf_config)
+                logger.info("BBRF integration enabled")
+            except ImportError:
+                logger.warning("BBRF client not available, BBRF integration disabled")
+                self.enable_bbrf = False
 
         # Initialize database
         self._init_db()
@@ -299,6 +316,10 @@ class BugBountyMonitor:
                 VALUES (?, ?, ?)
             ''', (platform, program.company, program.program_name))
 
+            # Save to BBRF if enabled
+            if self.enable_bbrf and self.bbrf_client:
+                self._save_to_bbrf(program, is_new=True)
+
             # Queue for SubFluxGPT
             self.trigger_queue.put({
                 'type': 'new_program',
@@ -371,6 +392,10 @@ class BugBountyMonitor:
                         json.dumps(change['old']),
                         json.dumps(change['new'])
                     ))
+
+                # Save to BBRF if enabled
+                if self.enable_bbrf and self.bbrf_client:
+                    self._save_to_bbrf(program, is_new=False, changes=changes)
 
                 # Queue for SubFluxGPT
                 self.trigger_queue.put({
@@ -534,6 +559,65 @@ class BugBountyMonitor:
         except Exception as e:
             logger.error(f"Error feeding to learning: {e}")
 
+    def _save_to_bbrf(self, program: BountyProgram, is_new: bool = True, changes: List[Dict] = None):
+        """Save program data to BBRF"""
+        if not self.bbrf_client or not self.bbrf_client.is_available():
+            logger.debug("BBRF not available, skipping save")
+            return
+
+        try:
+            # Create program in BBRF
+            program_name = f"{program.company}_{program.program_name}"
+
+            if is_new:
+                self.bbrf_client.create_program(
+                    program_name,
+                    metadata={
+                        'platform': program.platform,
+                        'url': program.url,
+                        'company': program.company
+                    }
+                )
+                logger.info(f"Created BBRF program: {program_name}")
+
+            # Add apex domains
+            for apex in program.apex_domains:
+                self.bbrf_client.add_domain(program_name, apex, source='bug_bounty_monitor')
+
+            # Add subdomains
+            for subdomain in program.subdomains:
+                self.bbrf_client.add_subdomain(program_name, subdomain, source='bug_bounty_monitor')
+
+            # Add in-scope items
+            for scope_item in program.in_scope:
+                if scope_item.startswith('http'):
+                    self.bbrf_client.add_url(program_name, scope_item, source='bug_bounty_monitor')
+                else:
+                    self.bbrf_client.add_subdomain(program_name, scope_item, source='bug_bounty_monitor')
+
+            logger.info(f"Saved program data to BBRF: {program_name}")
+
+        except Exception as e:
+            logger.error(f"Error saving to BBRF: {e}")
+
+    def toggle_monitoring(self, enable: bool):
+        """
+        Toggle monitoring on/off
+
+        Args:
+            enable: True to enable, False to disable
+        """
+        if enable and not self.running:
+            logger.info("Monitoring enabled")
+            self.running = True
+        elif not enable and self.running:
+            logger.info("Monitoring disabled")
+            self.running = False
+
+    def is_monitoring_active(self) -> bool:
+        """Check if monitoring is currently active"""
+        return self.running
+
     def _run_cloud_recon(self, apex_domain: str):
         """Run cloud reconnaissance on apex domain"""
         import subprocess
@@ -635,16 +719,63 @@ def main():
                        help='Monitor specific platform only')
     parser.add_argument('--platforms', type=str,
                        help='Monitor multiple platforms (comma-separated)')
+    parser.add_argument('--enable-bbrf', action='store_true',
+                       help='Enable BBRF integration')
+    parser.add_argument('--bbrf-endpoint', type=str, default='http://localhost:5000',
+                       help='BBRF API endpoint')
+    parser.add_argument('--bbrf-api-key', type=str,
+                       help='BBRF API key (or set BBRF_API_KEY env var)')
+    parser.add_argument('--bbrf-workspace', type=str, default='subfluxgpt',
+                       help='BBRF workspace name')
+    parser.add_argument('--start', action='store_true',
+                       help='Start monitoring (on)')
+    parser.add_argument('--stop', action='store_true',
+                       help='Stop monitoring (off)')
+    parser.add_argument('--status', action='store_true',
+                       help='Show monitoring status')
 
     args = parser.parse_args()
+
+    # BBRF configuration
+    bbrf_config = None
+    if args.enable_bbrf:
+        bbrf_config = {
+            'enabled': True,
+            'api_endpoint': args.bbrf_endpoint,
+            'api_key': args.bbrf_api_key,
+            'workspace': args.bbrf_workspace
+        }
 
     monitor = BugBountyMonitor(
         check_interval=args.interval,
         organize_folders=args.organize_folders,
         output_dir=args.output_dir,
         auto_recon=args.auto_recon,
-        recon_cmd=args.recon_cmd
+        recon_cmd=args.recon_cmd,
+        enable_bbrf=args.enable_bbrf,
+        bbrf_config=bbrf_config
     )
+
+    # Handle on/off switch
+    if args.start:
+        monitor.toggle_monitoring(True)
+        print("Monitoring enabled")
+        if not args.check_once and not args.list_new and not args.list_changes:
+            monitor.start_monitoring()
+        return
+
+    if args.stop:
+        monitor.toggle_monitoring(False)
+        print("Monitoring disabled")
+        return
+
+    if args.status:
+        status = monitor.is_monitoring_active()
+        print(f"Monitoring status: {'ACTIVE' if status else 'INACTIVE'}")
+        print(f"BBRF integration: {'ENABLED' if monitor.enable_bbrf else 'DISABLED'}")
+        print(f"Folder organization: {'ENABLED' if monitor.organize_folders else 'DISABLED'}")
+        print(f"Auto recon: {'ENABLED' if monitor.auto_recon else 'DISABLED'}")
+        return
 
     if args.list_new:
         programs = monitor.get_new_programs()
@@ -664,7 +795,7 @@ def main():
         monitor.check_all_platforms()
         return
 
-    # Start continuous monitoring
+    # Start continuous monitoring by default
     monitor.start_monitoring()
 
 

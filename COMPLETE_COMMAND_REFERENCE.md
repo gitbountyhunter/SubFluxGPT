@@ -197,6 +197,15 @@ subfluxgpt collect --database data/bugbounty.db --verbose
 # Start bug bounty platform monitor
 subfluxgpt monitor --interval 3600
 
+# Start monitoring with ON switch
+subfluxgpt monitor-start --interval 3600
+
+# Stop monitoring (OFF switch)
+subfluxgpt monitor-stop
+
+# Check monitoring status
+subfluxgpt monitor-status
+
 # Check platforms once
 subfluxgpt monitor --check-once
 
@@ -211,6 +220,25 @@ subfluxgpt monitor --list-changes 168
 
 # Monitor with custom interval
 subfluxgpt monitor --interval 1800
+
+# Monitor with folder organization
+subfluxgpt monitor --interval 3600 --organize-folders --output-dir targets/
+
+# Monitor with auto recon
+subfluxgpt monitor --interval 3600 --auto-recon --organize-folders
+
+# Monitor with BBRF integration
+subfluxgpt monitor --interval 3600 --enable-bbrf --bbrf-api-key YOUR_KEY
+
+# Monitor with ALL features
+subfluxgpt monitor-start \
+  --interval 3600 \
+  --organize-folders \
+  --auto-recon \
+  --enable-bbrf \
+  --bbrf-endpoint http://localhost:5000 \
+  --bbrf-api-key YOUR_API_KEY \
+  --output-dir targets/
 
 # Monitor specific platform only
 python3 bug_bounty_monitor.py --platform hackerone --interval 3600
