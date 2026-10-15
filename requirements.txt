@@ -73,7 +73,7 @@ aiohttp==3.9.1
 
 # Notification system
 slack-sdk==3.27.1
-discord-webhook==1.0.4
+discord-webhook==1.0.0
 
 # Email notifications (optional)
 python-dotenv==1.0.0
