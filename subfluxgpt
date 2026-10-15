@@ -15,6 +15,9 @@ case "$1" in
     cloud)
         python3 "$SUBFLUX_DIR/run_cloud_recon.py" "${@:2}"
         ;;
+    cloud-bountycatch)
+        python3 "$SUBFLUX_DIR/run_cloud_recon.py" --export --bountycatch-import "${@:2}"
+        ;;
     recon)
         python3 "$SUBFLUX_DIR/run_recon.py" "${@:2}"
         ;;

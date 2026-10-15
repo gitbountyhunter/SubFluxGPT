@@ -63,6 +63,8 @@ Examples:
     parser.add_argument('--no-tech', action='store_true', help='Disable tech fingerprinting (enhanced mode)')
     parser.add_argument('--threat-intel', action='store_true', help='Enable threat intelligence (enhanced mode)')
     parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose mode with live updates')
+    parser.add_argument('--bountycatch-import', action='store_true', help='Automatically import to BountyCatch Remix after export')
+    parser.add_argument('--bountycatch-path', type=str, default='~/bountycatchremix', help='Path to BountyCatch Remix directory')
 
     args = parser.parse_args()
     
@@ -149,8 +151,60 @@ Examples:
             )
             print(f"✓ Exported to: {export_path}")
             print()
-            print(f"To import into BountyCatch Remix:")
-            print(f"  python3 bountycatch.py add -p {args.project} -f {export_path}")
+
+            # Automatically import to BountyCatch Remix if requested
+            if args.bountycatch_import:
+                print("=" * 60)
+                print("Importing to BountyCatch Remix")
+                print("=" * 60)
+                print()
+
+                try:
+                    import subprocess
+                    from pathlib import Path
+
+                    bountycatch_path = Path(args.bountycatch_path).expanduser()
+                    bountycatch_script = bountycatch_path / 'bountycatch.py'
+
+                    if not bountycatch_script.exists():
+                        print(f"✗ BountyCatch Remix not found at: {bountycatch_path}")
+                        print(f"Please ensure BountyCatch Remix is installed at that path")
+                    else:
+                        # Run BountyCatch import command
+                        cmd = [
+                            'python3',
+                            str(bountycatch_script),
+                            'add',
+                            '-p', args.project,
+                            '-f', str(export_path)
+                        ]
+
+                        result = subprocess.run(
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            timeout=300
+                        )
+
+                        if result.returncode == 0:
+                            print(f"✓ Successfully imported to BountyCatch Remix")
+                            print(f"  Project: {args.project}")
+                            print(f"  File: {export_path}")
+                            if result.stdout:
+                                print(f"  Output: {result.stdout}")
+                        else:
+                            print(f"✗ Import to BountyCatch Remix failed")
+                            print(f"  Error: {result.stderr}")
+
+                except subprocess.TimeoutExpired:
+                    print(f"✗ BountyCatch import timed out")
+                except Exception as e:
+                    print(f"✗ Error importing to BountyCatch: {e}")
+
+            else:
+                print(f"To import into BountyCatch Remix:")
+                print(f"  python3 bountycatch.py add -p {args.project} -f {export_path}")
+
         except Exception as e:
             print(f"✗ Export failed: {e}")
 

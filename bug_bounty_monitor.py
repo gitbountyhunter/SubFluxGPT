@@ -51,7 +51,9 @@ class BugBountyMonitor:
                  auto_recon: bool = False,
                  recon_cmd: str = None,
                  enable_bbrf: bool = False,
-                 bbrf_config: dict = None):
+                 bbrf_config: dict = None,
+                 enable_bountycatch: bool = False,
+                 bountycatch_path: str = '~/bountycatchremix'):
         """
         Initialize monitor
 
@@ -64,6 +66,8 @@ class BugBountyMonitor:
             recon_cmd: Custom recon command (use {domain} placeholder)
             enable_bbrf: Enable BBRF integration
             bbrf_config: BBRF configuration dictionary
+            enable_bountycatch: Enable BountyCatch Remix integration
+            bountycatch_path: Path to BountyCatch Remix directory
         """
         self.db_path = db_path
         self.check_interval = check_interval
@@ -91,6 +95,16 @@ class BugBountyMonitor:
             except ImportError:
                 logger.warning("BBRF client not available, BBRF integration disabled")
                 self.enable_bbrf = False
+
+        # BountyCatch Remix integration
+        self.enable_bountycatch = enable_bountycatch
+        self.bountycatch_path = Path(bountycatch_path).expanduser()
+        if enable_bountycatch:
+            if not self.bountycatch_path.exists():
+                logger.warning(f"BountyCatch Remix not found at {self.bountycatch_path}")
+                self.enable_bountycatch = False
+            else:
+                logger.info("BountyCatch Remix integration enabled")
 
         # Initialize database
         self._init_db()
@@ -519,10 +533,19 @@ class BugBountyMonitor:
         output_file = folder / 'recon' / f"{safe_domain}_cloud_recon.json"
 
         try:
+            # Build cloud recon command
+            cmd = [
+                'subfluxgpt', 'cloud', '--enhanced', '--apex', apex_domain,
+                '--output', str(output_file), '--verbose'
+            ]
+
+            # Add BountyCatch import if enabled
+            if self.enable_bountycatch:
+                cmd.extend(['--bountycatch-import', '--bountycatch-path', str(self.bountycatch_path)])
+
             # Run cloud recon with output
             result = subprocess.run(
-                ['subfluxgpt', 'cloud', '--enhanced', '--apex', apex_domain,
-                 '--output', str(output_file), '--verbose'],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=600
@@ -530,6 +553,9 @@ class BugBountyMonitor:
 
             if result.returncode == 0:
                 logger.info(f"Cloud recon completed for {apex_domain}, saved to {output_file}")
+
+                if self.enable_bountycatch:
+                    logger.info(f"Domains imported to BountyCatch Remix")
 
                 # Also feed to AI learning
                 self._feed_to_learning(apex_domain, result.stdout)
@@ -727,6 +753,10 @@ def main():
                        help='BBRF API key (or set BBRF_API_KEY env var)')
     parser.add_argument('--bbrf-workspace', type=str, default='subfluxgpt',
                        help='BBRF workspace name')
+    parser.add_argument('--enable-bountycatch', action='store_true',
+                       help='Enable BountyCatch Remix integration')
+    parser.add_argument('--bountycatch-path', type=str, default='~/bountycatchremix',
+                       help='Path to BountyCatch Remix directory')
     parser.add_argument('--start', action='store_true',
                        help='Start monitoring (on)')
     parser.add_argument('--stop', action='store_true',
@@ -753,7 +783,9 @@ def main():
         auto_recon=args.auto_recon,
         recon_cmd=args.recon_cmd,
         enable_bbrf=args.enable_bbrf,
-        bbrf_config=bbrf_config
+        bbrf_config=bbrf_config,
+        enable_bountycatch=args.enable_bountycatch,
+        bountycatch_path=args.bountycatch_path
     )
 
     # Handle on/off switch
@@ -773,6 +805,7 @@ def main():
         status = monitor.is_monitoring_active()
         print(f"Monitoring status: {'ACTIVE' if status else 'INACTIVE'}")
         print(f"BBRF integration: {'ENABLED' if monitor.enable_bbrf else 'DISABLED'}")
+        print(f"BountyCatch Remix integration: {'ENABLED' if monitor.enable_bountycatch else 'DISABLED'}")
         print(f"Folder organization: {'ENABLED' if monitor.organize_folders else 'DISABLED'}")
         print(f"Auto recon: {'ENABLED' if monitor.auto_recon else 'DISABLED'}")
         return

@@ -102,6 +102,18 @@ subfluxgpt cloud --enhanced --apex example.com --output data/cloud_recon/example
 
 # Cloud recon with AI analysis
 python3 run_cloud_recon.py --enhanced --apex example.com --ai-analysis --verbose
+
+# Cloud recon with BountyCatch Remix export
+subfluxgpt cloud --export --project example_recon
+
+# Cloud recon with automatic BountyCatch Remix import
+subfluxgpt cloud --export --bountycatch-import --project example_recon
+
+# Cloud recon with full workflow and BountyCatch
+subfluxgpt cloud --full --apex example.com --project example_recon --bountycatch-import --verbose
+
+# Cloud recon with custom BountyCatch path
+python3 run_cloud_recon.py --export --bountycatch-import --bountycatch-path ~/bountycatchremix --project example_recon
 ```
 
 #### 4. Security Reconnaissance Commands
