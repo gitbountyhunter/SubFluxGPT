@@ -100,7 +100,7 @@ memory-profiler==0.61.0
 GitPython==3.1.40
 
 # Alerting
-notifiers==1.9.1
+notifiers==2.0.0
 
 # AI Integration and Fine-Tuning
 peft==0.7.1
