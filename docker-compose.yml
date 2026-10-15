@@ -20,6 +20,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - subfluxgpt_network
 
   # Redis for caching and task queue
   redis:
@@ -33,6 +35,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - subfluxgpt_network
 
   # Data collector service
   collector:
@@ -44,6 +48,7 @@ services:
       - ./data_collector/storage:/app/data_collector/storage
       - ./config.yaml:/app/config.yaml
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
       - REDIS_URL=redis://redis:6379/0
@@ -57,7 +62,7 @@ services:
     networks:
       - subfluxgpt_network
 
-  # Training pipeline service
+  # Training pipeline service (GPU-enabled)
   trainer:
     build: .
     container_name: subfluxgpt_trainer
@@ -69,6 +74,7 @@ services:
       - ./models:/app/models
       - ./config.yaml:/app/config.yaml
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
       - REDIS_URL=redis://redis:6379/0
@@ -89,6 +95,36 @@ services:
     restart: unless-stopped
     networks:
       - subfluxgpt_network
+    profiles:
+      - gpu
+
+  # Training pipeline service (CPU-only)
+  trainer-cpu:
+    build: .
+    container_name: subfluxgpt_trainer_cpu
+    command: python -m training_pipeline.scheduler
+    volumes:
+      - ./training_pipeline:/app/training_pipeline
+      - ./llama2.c:/app/llama2.c
+      - ./nanoGPT:/app/nanoGPT
+      - ./models:/app/models
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+    profiles:
+      - cpu
 
   # Inference server
   inference:
@@ -100,6 +136,7 @@ services:
       - ./models:/app/models
       - ./config.yaml:/app/config.yaml
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - REDIS_URL=redis://redis:6379/0
       - MODEL_PATH=/app/models
@@ -109,6 +146,11 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - subfluxgpt_network
 
@@ -121,6 +163,7 @@ services:
       - ./monitoring:/app/monitoring
       - ./config.yaml:/app/config.yaml
       - ./logs:/app/logs
+      - ./data:/app/data
     environment:
       - DATABASE_URL=postgresql://subflux:${DB_PASSWORD:-changeme}@postgres:5432/subfluxgpt
       - REDIS_URL=redis://redis:6379/0
@@ -135,6 +178,61 @@ services:
     restart: unless-stopped
     networks:
       - subfluxgpt_network
+
+  # Bug bounty monitor
+  bugbounty-monitor:
+    build: .
+    container_name: subfluxgpt_bugbounty_monitor
+    command: python bug_bounty_monitor.py --interval 3600
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./targets:/app/targets
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+    profiles:
+      - monitoring
+
+  # Self-improving LLM
+  self-improving:
+    build: .
+    container_name: subfluxgpt_self_improving
+    command: python self_improving_llm.py --start
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+    profiles:
+      - ai
+
+  # Cloud recon worker
+  cloud-recon:
+    build: .
+    container_name: subfluxgpt_cloud_recon
+    command: python run_cloud_recon.py --download --process
+    volumes:
+      - ./cloud_recon:/app/cloud_recon
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+      - ./cloud_recon_data:/app/cloud_recon_data
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - subfluxgpt_network
+    profiles:
+      - recon
 
 volumes:
   postgres_data:

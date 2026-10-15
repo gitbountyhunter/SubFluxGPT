@@ -48,12 +48,41 @@ case "$1" in
     learn)
         python3 "$SUBFLUX_DIR/self_improving_llm.py" "${@:2}"
         ;;
+    # 🥷 Ninja AI Workflows
+    auto-pwn)
+        python3 -c "from ai_integration.ninja_automator import NinjaAutomator; import json; auto = NinjaAutomator(); result = auto.auto_pwn('${2:-example.com}', '${3:-auto}', '${4:-normal}'); print(json.dumps(result, indent=2))"
+        ;;
+    swarm)
+        python3 -c "from ai_integration.ninja_automator import NinjaAutomator; import json; auto = NinjaAutomator(); result = auto.swarm_attack(['${2}'], '${3:-auto}', '${4:-normal}', 5); print(json.dumps(result, indent=2))"
+        ;;
+    attack-path)
+        python3 -c "from ai_integration.attack_path_discovery import AttackPathDiscovery; import json; disc = AttackPathDiscovery(); print(json.dumps(disc.discover_attack_paths([]), indent=2))"
+        ;;
+    threat-intel)
+        python3 -c "from ai_integration.threat_intelligence_analyzer import ThreatIntelligenceAnalyzer; import json; analyzer = ThreatIntelligenceAnalyzer(); result = analyzer.analyze_domain('${2:-example.com}'); print(json.dumps(result, indent=2))"
+        ;;
+    generate-payloads)
+        python3 -c "from ai_integration.intelligent_payload_generator import IntelligentPayloadGenerator; import json; gen = IntelligentPayloadGenerator(); payloads = gen.generate_payloads('${2:-xss}', count=${3:-10}); print(json.dumps([p.__dict__ for p in payloads], indent=2))"
+        ;;
+    vuln-report)
+        python3 -c "from ai_integration.vulnerability_report_generator import VulnerabilityReportGenerator; import json; gen = VulnerabilityReportGenerator(); result = gen.generate_report([], '${2:-example.com}', '${3:-markdown}', '${4:-report.md}'); print(json.dumps(result, indent=2))"
+        ;;
+    # 🤖 AI Model Management
+    ai-leaderboard)
+        python3 -c "from ai_integration.model_manager import AIModelManager; manager = AIModelManager(); manager.start_leaderboard_monitor()"
+        ;;
+    ai-stats)
+        python3 -c "from ai_integration.model_manager import AIModelManager; import json; manager = AIModelManager(); print(json.dumps(manager.get_model_stats(), indent=2))"
+        ;;
+    ai-select)
+        python3 -c "from ai_integration.model_manager import AIModelManager; manager = AIModelManager(); best = manager.select_best_model('${2:-vulnerability_analysis}'); print(f'Best model: {best}')"
+        ;;
     *)
-        echo "SubFluxGPT - AI-Powered Bug Bounty Reconnaissance System"
+        echo "SubFluxGPT - AI-Powered Bug Bounty Reconnaissance System 🥷"
         echo ""
         echo "Usage: subfluxgpt <command> [options]"
         echo ""
-        echo "Commands:"
+        echo "Core Commands:"
         echo "  train       Train LLM models with llm.c backend"
         echo "  benchmark   Run benchmarking on models"
         echo "  cloud       Run cloud reconnaissance"
@@ -65,15 +94,32 @@ case "$1" in
         echo "  fine-tune   Fine-tune models with Unsloth/QLoRA"
         echo "  learn       Run continuous learning system"
         echo ""
+        echo "🥷 Ninja AI Workflows:"
+        echo "  auto-pwn          Automated security testing with AI decision-making"
+        echo "  swarm             Multi-target swarm attack automation"
+        echo "  attack-path       Discover attack chains and vulnerability correlations"
+        echo "  threat-intel      Analyze domains/IPs for threat intelligence"
+        echo "  generate-payloads Generate intelligent payloads for testing"
+        echo "  vuln-report       Generate professional vulnerability reports"
+        echo ""
+        echo "🤖 AI Model Management:"
+        echo "  ai-leaderboard    Live leaderboard monitor (competing AI models)"
+        echo "  ai-stats          Show AI model statistics"
+        echo "  ai-select         Select best model for a task"
+        echo ""
         echo "Examples:"
         echo "  subfluxgpt train --model_size 124M --verbose"
         echo "  subfluxgpt cloud --enhanced --apex example.com"
         echo "  subfluxgpt recon --domain example.com"
-        echo "  subfluxgpt benchmark --domain example.com --verbose"
+        echo "  subfluxgpt auto-pwn example.com auto aggressive"
+        echo "  subfluxgpt threat-intel example.com"
+        echo "  subfluxgpt generate-payloads xss 20"
+        echo "  subfluxgpt ai-leaderboard"
         echo ""
         echo "For more information, see:"
         echo "  - MASTER_COMMAND_GUIDE.md"
         echo "  - MINI_AI_GUIDE.md"
         echo "  - AI_WORKFLOWS.md"
+        echo "  - DOCKER_SETUP.md"
         ;;
 esac
